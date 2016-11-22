@@ -1,6 +1,6 @@
 # tangentlines
 
-Draws tangent line segments between ellipses, circles and markers
+Draws tangent line segments between ellipses, arcs, circles and markers
 
 ![examples](example_1.png)
 
