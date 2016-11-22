@@ -42,18 +42,6 @@ Draws tangent segments from a primary selected marker/circle/ellipse to all othe
 By Andrew Martchenko
 ]]
 
-function unit_circ_to_circ_intersect(x1,y1,r1)
-   local dc = math.sqrt(x1*x1 + y1*y1)      -- distance between centers
-   local A = (dc*dc + r1*r1 - 1)/(2*dc)    
-   local B = math.sqrt(r1*r1 - A*A)
-   local p1 = ipe.Vector(x1 - (x1*A + y1*B)/dc,
-			 y1 - (y1*A - x1*B)/dc)
-   --OR					   
-   local p2 = ipe.Vector(x1 - (x1*A - y1*B)/dc,
-			 y1 - (y1*A + x1*B)/dc)
-   return p1, p2
-end
-
 function create_objects(model, objects)
 
    if #objects>0 then
@@ -109,26 +97,24 @@ end
 
 
 function unit_circ_to_mark_tangent_points(m)
-
-   local r = 1
-   if r==0 then return c,c end
-   -- local d = c-m
-   local ll = m:sqLen()
-   if(ll<=1) then return end -- there are no tagent lines in this case
+   local len = m:sqLen()
+   if(len<=1) then return end -- there are no tagent lines in this case
+   local r = math.sqrt(len - 1)
+   local a1 = ipe.Arc(ipe.Matrix(r,0,0,r,m.x,m.y))
+   local a2 = ipe.Arc(ipe.Matrix(1,0,0,1,0,0))
+   return a1:intersect(a2)
    
-   local r2 = math.sqrt(ll - 1)
-
-   return unit_circ_to_circ_intersect(m.x, m.y, r2)
 end
 
 
 function ellipse_to_mark_tangent_points(m, e)
    if m==nil then return end
-   local p=e:inverse()*m; -- undo affine transformations
-   local p1,p2 = unit_circ_to_mark_tangent_points(p)
+   local ma=e:inverse()*m; -- undo affine transformations
+   local p = unit_circ_to_mark_tangent_points(ma)
+
    -- redo affine transformation
-   if p1 then -- if tangent points exist
-      return e*p1, e*p2
+   if p~=nil then -- if tangent points exist
+      return e*p[1], e*p[2]
    else
       return
    end
@@ -200,6 +186,26 @@ function ellipse_to_ellipse_tangent_segments(model, e1, e2)
    local p1a,p1b,p2a,p2b = {},{},{},{}
 
 
+   
+
+   -- local int = arc1:intersect(arc2)
+
+   -- if #int<=1 then -- there are zero or one intersects
+      -- start at any point
+      p1[1] = max_dist(e1,e2:translation())
+      -- from p1a find tangent points to e2, call these points p2[1] and p2[2]
+      p2[1],p2[2] = ellipse_to_mark_tangent_points(p1[1],e2)
+      -- from p2[1] and p2[2] find tangent points to e1, call them p1[1], p1[2], p1[3] and p1[4]
+      p1[1],p1[3] = ellipse_to_mark_tangent_points(p2[1],e1)
+      p1[2],p1[4] = ellipse_to_mark_tangent_points(p2[2],e1)
+   -- elseif #int==2 then
+      -- if there are two intersects
+      -- local arc1 = ipe.Arc(e1)
+      -- local arc2 = ipe.Arc(e2)
+      -- local a1 = 
+   -- end
+   -- print(int[1])
+
    -- TODO
    -- if intersecting then
    --     find intersections
@@ -210,12 +216,7 @@ function ellipse_to_ellipse_tangent_segments(model, e1, e2)
    -- find the longer ellipse then make it e1
    -- e1,e2 = sort_by_length(e1,e2)
    -- find the most distant point on e1 from the center of e2
-   p1[1] = max_dist(e1,e2:translation())
-   -- from p1a find tangent points to e2, call these points p2[1] and p2[2]
-   p2[1],p2[2] = ellipse_to_mark_tangent_points(p1[1],e2)
-   -- from p2[1] and p2[2] find tangent points to e1, call them p1[1], p1[2], p1[3] and p1[4]
-   p1[1],p1[3] = ellipse_to_mark_tangent_points(p2[1],e1)
-   p1[2],p1[4] = ellipse_to_mark_tangent_points(p2[2],e1)
+   
 
    -- if no tangents found, try swapping the ellipses
    if count_nils(p1)>0 then
@@ -299,7 +300,7 @@ end
 
 
 function print_selection_warning(model)
-   model:warning("Must select either:\nA marker and circle\nOR\nTwo circles")
+   model:warning("Must select at least two markers, circles, ellipses and/or arcs")
 end
 
 function table_concat(t1,t2)
