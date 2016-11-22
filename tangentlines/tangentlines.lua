@@ -91,10 +91,14 @@ function circle_radius(mat)
 end
 
 function get_object_type(obj)
+   local matrix
    if obj:type()=="path" then
       if obj:shape()[1].type == "ellipse" then
-	 local matrix = obj:matrix()*obj:shape()[1][1]
-	    return {type="ellipse", matrix=matrix}
+	 matrix = obj:matrix()*obj:shape()[1][1]
+	 return {type="ellipse", matrix=matrix}
+      elseif obj:shape()[1].type == "curve" and obj:shape()[1][1].type == "arc" then
+	 matrix = obj:matrix()*obj:shape()[1][1].arc:matrix()
+	 return {type="ellipse", matrix=matrix}
       else
 	 return {type=nil, matrix=nil}
       end
@@ -119,6 +123,7 @@ end
 
 
 function ellipse_to_mark_tangent_points(m, e)
+   if m==nil then return end
    local p=e:inverse()*m; -- undo affine transformations
    local p1,p2 = unit_circ_to_mark_tangent_points(p)
    -- redo affine transformation
@@ -166,21 +171,21 @@ function max_dist(e1,c)
 end
 
 -- takes two ellipses and sorts them by length
-function sort_by_length(e1,e2)
-   local s1a,s1b,s2a,s2b
+-- function sort_by_length(e1,e2)
+--    local s1a,s1b,s2a,s2b
 
-   -- find the length of the major axis
-   s1a = ipe.Vector(e1:elements()[1],e1:elements()[2]):len()
-   s1b = ipe.Vector(e1:elements()[3],e1:elements()[4]):len()
-   s2a = ipe.Vector(e2:elements()[1],e2:elements()[2]):len()
-   s2b = ipe.Vector(e2:elements()[3],e2:elements()[4]):len()
+--    -- find the length of the major axis
+--    s1a = ipe.Vector(e1:elements()[1],e1:elements()[2]):len()
+--    s1b = ipe.Vector(e1:elements()[3],e1:elements()[4]):len()
+--    s2a = ipe.Vector(e2:elements()[1],e2:elements()[2]):len()
+--    s2b = ipe.Vector(e2:elements()[3],e2:elements()[4]):len()
 
-   -- find the largest major axis
-   if s1a<s1b then s1a=s1b end
-   if s2a<s2b then s2a=s2b end
-   if s1a<s2a then return e2,e1 else return e1, e2 end -- swap if largest is not e1
+--    -- find the largest major axis
+--    if s1a<s1b then s1a=s1b end
+--    if s2a<s2b then s2a=s2b end
+--    if s1a<s2a then return e2,e1 else return e1, e2 end -- swap if largest is not e1
 
-end
+-- end
 
 function count_nils(t)
    local c=0
@@ -203,7 +208,7 @@ function ellipse_to_ellipse_tangent_segments(model, e1, e2)
    
 
    -- find the longer ellipse then make it e1
-   e1,e2 = sort_by_length(e1,e2)
+   -- e1,e2 = sort_by_length(e1,e2)
    -- find the most distant point on e1 from the center of e2
    p1[1] = max_dist(e1,e2:translation())
    -- from p1a find tangent points to e2, call these points p2[1] and p2[2]
@@ -236,7 +241,7 @@ function ellipse_to_ellipse_tangent_segments(model, e1, e2)
       for j=1,4 do -- for all four possible tangent points
 
 	 -- if p1[j] exists, then generate possible tangent points to e2
-	 if p1[j] then p2a[j],p2b[j] = ellipse_to_mark_tangent_points(p1[j], e2) end
+	 p2a[j],p2b[j] = ellipse_to_mark_tangent_points(p1[j], e2) 
 
 	 -- if generated tangent points exist
    	 if p2a[j] then
@@ -247,7 +252,7 @@ function ellipse_to_ellipse_tangent_segments(model, e1, e2)
 	 end
 
 	 -- repeate abve steps, but form the point of view of the other ellipse
-	 if p2[j] then p1a[j],p1b[j] = ellipse_to_mark_tangent_points(p2[j], e1) end
+	 p1a[j],p1b[j] = ellipse_to_mark_tangent_points(p2[j], e1)
 
       	 if p1a[j] then
 	    if length(p1[j], p1a[j]) < length(p1[j], p1b[j]) then p1[j] = p1a[j] else p1[j] = p1b[j] end
