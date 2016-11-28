@@ -1,26 +1,21 @@
-# tangentlines
+# polyfillet
 
-Draws tangent line segments between ellipses, circles and markers
+Creates circular fillets in polylines or polygons
 
-![examples](example_1.png)
+![examples](fillet_example.png)
 
 ## Download and Installation
 
-Download [tangentlines.lua!](tangentlines.lua) and copy to ~/.ipe/ipelets/ (or to some other directory for ipelets)
+Download [polyfillet.lua](polyfillet.lua) and copy to ~/.ipe/ipelets/ (or to some other directory for ipelets)
 
 ## Usage
 
-* Select at least two ellipses, circles and/or markers, then click "Ipelets->Tangent Lines" or use the short cut Alt-t.
-* Tangent lines will be drawn from the primary selection to all other selected objects.
-* To change the primary selection, go into selection mode (hit "s" on the keyboard) then while holding the Shift key double click on the object which you would like as your primary selection.
-* If there are any intersecting tangent line segments, they will remain selected so that you can easily delete them withs the "Delete" key.
+* Select one or more polylines or polygons paths, then click "Ipelets->Polyfillet" or use the short cut Shift-f.
+* Enter the fillet radius and hit enter.
+* Fillets will be drawn between all linear line segments in the selected path.
+* Non-linear line segments will be ignored.
+* Line segments that are too small for the fillet will also be ignored
 
 ## Author
 
 * Andrew Martchenko
-
-## Bugs
-
-1. Fails to draw tangent lines when a small ellipse is intersecting the pointy end of a large ellipse as in the example below.
-
-![examples](bug_1.png)
