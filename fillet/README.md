@@ -1,4 +1,4 @@
-# fillet
+# polyfillet
 
 Creates circular fillets in polylines and polygons.
 
@@ -6,12 +6,12 @@ Creates circular fillets in polylines and polygons.
 
 ## Download and Installation
 
-Download [fillet.lua](fillet.lua) and copy to ~/.ipe/ipelets/ (or to some other directory for ipelets)
+Download [polyfillet.lua](polyfillet.lua) and copy to ~/.ipe/ipelets/ (or to some other directory for ipelets)
 
 ## Usage
 
-* Select one or more polygons/polylines then click "Ipelets->Fillet" or use the short cut Shift-F.
-* Specify the radius of the fillets and hit enter.
+* Select one or more polygons/polylines then click "Ipelets->Polyfillet" or use the short cut Shift-F.
+* Specify the fillet radius and hit enter.
 
 ## Note
 * Grouped paths will be ignored.
