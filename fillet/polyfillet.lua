@@ -1,6 +1,6 @@
 
 
-label = "Fillet"
+label = "Polyfillet"
 
 about = [[
 Create fillets in a polyline or polygon
@@ -163,4 +163,4 @@ end
 
 
 ----------------------------------------------------------------------
-shortcuts.ipelet_1_fillet = "Shift+f"
+shortcuts.ipelet_1_polyfillet = "Shift+f"
