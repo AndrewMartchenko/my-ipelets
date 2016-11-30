@@ -182,7 +182,6 @@ function ellipse_to_ellipse_tangent_segments(model, e1, e2)
       end
 
    end
-s
    
 
    
