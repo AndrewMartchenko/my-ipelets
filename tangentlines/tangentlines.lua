@@ -112,12 +112,15 @@ function ellipse_to_mark_tangent_points(m, e)
    local ma=e:inverse()*m; -- undo affine transformations
    local p = unit_circ_to_mark_tangent_points(ma)
 
-   -- redo affine transformation
-   if p~=nil then -- if tangent points exist
-      return e*p[1], e*p[2]
-   else
-      return
-   end
+   -- redo affine transformation if tangent points exist
+   if p~=nil then return e*p[1], e*p[2]
+   else return end
+end
+
+
+function is_point_inside_ellipse(p,e)
+   if (e:inverse()*p):len() < 1 then return true
+   else return false end
 end
 
 function ellipse_to_mark_tangent_segments(model, m, e)
@@ -128,147 +131,89 @@ function ellipse_to_mark_tangent_segments(model, m, e)
    return segs
 end
 
-function length(a,b)
-   return math.sqrt((a.x-b.x)*(a.x-b.x) + (a.y-b.y)*(a.y-b.y))
-end
-
-
-function max_dist(e1,c)
-   local pa, pb, a
-   local t=math.pi/2
-
-   local p = ellipse_point_at_angle(e1,0)
-
-   a=0
-   for i=1,10 do
-      pa = ellipse_point_at_angle(e1,a+t)
-      pb = ellipse_point_at_angle(e1,a-t)
-      if length(pa,c)>length(pb,c) then
-	 p=pa
-	 a=a+t
-      else
-	 p=pb
-	 a=a-t
-      end
-      t=t/2;
-   end
-
-   return p
-end
-
--- takes two ellipses and sorts them by length
--- function sort_by_length(e1,e2)
---    local s1a,s1b,s2a,s2b
-
---    -- find the length of the major axis
---    s1a = ipe.Vector(e1:elements()[1],e1:elements()[2]):len()
---    s1b = ipe.Vector(e1:elements()[3],e1:elements()[4]):len()
---    s2a = ipe.Vector(e2:elements()[1],e2:elements()[2]):len()
---    s2b = ipe.Vector(e2:elements()[3],e2:elements()[4]):len()
-
---    -- find the largest major axis
---    if s1a<s1b then s1a=s1b end
---    if s2a<s2b then s2a=s2b end
---    if s1a<s2a then return e2,e1 else return e1, e2 end -- swap if largest is not e1
-
--- end
-
-function count_nils(t)
-   local c=0
-   for i=1,4 do
-      if t[i]==nil then c=c+1 end
-   end
-   return c
-end
-
 function ellipse_to_ellipse_tangent_segments(model, e1, e2)
    local p1, p2 = {},{}
-   local p1a,p1b,p2a,p2b = {},{},{},{}
+   local pa,pb -- temporary points
 
+   local arc1 = ipe.Arc(e1)
+   local arc2 = ipe.Arc(e2)
 
-   
+   local ints = arc1:intersect(arc2)
 
-   -- local int = arc1:intersect(arc2)
-
-   -- if #int<=1 then -- there are zero or one intersects
+   if #ints==0 then -- ellipses are not intersecting
       -- start at any point
-      p1[1] = max_dist(e1,e2:translation())
+      p1[1] = ellipse_point_at_angle(e1,0)
       -- from p1a find tangent points to e2, call these points p2[1] and p2[2]
       p2[1],p2[2] = ellipse_to_mark_tangent_points(p1[1],e2)
       -- from p2[1] and p2[2] find tangent points to e1, call them p1[1], p1[2], p1[3] and p1[4]
       p1[1],p1[3] = ellipse_to_mark_tangent_points(p2[1],e1)
       p1[2],p1[4] = ellipse_to_mark_tangent_points(p2[2],e1)
-   -- elseif #int==2 then
-      -- if there are two intersects
-      -- local arc1 = ipe.Arc(e1)
-      -- local arc2 = ipe.Arc(e2)
-      -- local a1 = 
-   -- end
-   -- print(int[1])
 
-   -- TODO
-   -- if intersecting then
-   --     find intersections
-   --     use points close to intersections to start the searching process.
-   -- end
-   
+      p2[3], p2[4] = p2[1], p2[2]
 
-   -- find the longer ellipse then make it e1
-   -- e1,e2 = sort_by_length(e1,e2)
-   -- find the most distant point on e1 from the center of e2
-   
+   else
+      local circ
+      local cx1, cx2
+      local segs={}
+      for i=1,#ints do
 
-   -- if no tangents found, try swapping the ellipses
-   if count_nils(p1)>0 then
-      -- swap e1 and e2
-      e1,e2 = e2,e1
-      -- find the most distant point on e1 from the center of e2
-      p1[1] = max_dist(e1,e2:translation())
-      -- from p1a find tangent points to e2, call these points p2[1] and p2[2]
-      p2[1],p2[2] = ellipse_to_mark_tangent_points(p1[1],e2)
-      -- from p2[1] and p2[2] find tangent points to e1, call them p1[1], p1[2], p1[3] and p1[4]
-      p1[1],p1[3] = ellipse_to_mark_tangent_points(p2[1],e1)
-      p1[2],p1[4] = ellipse_to_mark_tangent_points(p2[2],e1)
+	 -- at intersection create a small circle
+	 circ = ipe.Arc(ipe.Matrix({1,0,0,1,ints[i].x,ints[i].y}))
+
+	 -- find intersects between small circle and ellipses
+	 cx1 = circ:intersect(arc1)
+	 cx2 = circ:intersect(arc2) 
+
+	 -- set p1[i] and p2[i] to the points that are outside both ellipses
+	 if is_point_inside_ellipse((cx1[1]+cx2[1])*0.5,e1)==false and is_point_inside_ellipse((cx1[1]+cx2[1])*0.5,e2)==false then
+	    p1[i] = cx1[1]
+	    p2[i] = cx2[1]
+	 elseif is_point_inside_ellipse((cx1[1]+cx2[2])*0.5,e1)==false and is_point_inside_ellipse((cx1[1]+cx2[2])*0.5,e2)==false then
+	    p1[i] = cx1[1]
+	    p2[i] = cx2[2]
+	 elseif is_point_inside_ellipse((cx1[2]+cx2[1])*0.5,e1)==false and is_point_inside_ellipse((cx1[2]+cx2[1])*0.5,e2)==false then
+	    p1[i] = cx1[2]
+	    p2[i] = cx2[1]
+	 else
+	    p1[i] = cx1[2]
+	    p2[i] = cx2[2]
+	 end
+
+      end
+
    end
-
-   p2[3], p2[4] = p2[1], p2[2]
+s
+   
 
    
    -- from all p1[x] points find tangent point to e2, call them p2[x] and keep only the ones that are closest to the old p2[x] points
    -- repeat last step until convergence.
 
-   for i=1,10 do 
+   for i=1,20 do 
 
-      for j=1,4 do -- for all four possible tangent points
+      for j=1,#p1 do -- for all four possible tangent points
 
 	 -- if p1[j] exists, then generate possible tangent points to e2
-	 p2a[j],p2b[j] = ellipse_to_mark_tangent_points(p1[j], e2) 
+	 pa,pb = ellipse_to_mark_tangent_points(p1[j], e2) 
 
 	 -- if generated tangent points exist
-   	 if p2a[j] then
+	 if is_point_inside_ellipse(pa,e1) then p2[j]=pb
+	 elseif is_point_inside_ellipse(pb,e1) then p2[j]=pa
 	    -- find the closest one to the previouse value of p2[j] and set it to p2[j]
-	    if length(p2[j], p2a[j]) < length(p2[j], p2b[j]) then p2[j] = p2a[j] else p2[j] = p2b[j] end
-	 else
-	    p2[j]=nil
-	 end
+	 elseif (p2[j]-pa):len() < (p2[j]-pb):len() then p2[j] = pa else p2[j] = pb end
 
-	 -- repeate abve steps, but form the point of view of the other ellipse
-	 p1a[j],p1b[j] = ellipse_to_mark_tangent_points(p2[j], e1)
 
-      	 if p1a[j] then
-	    if length(p1[j], p1a[j]) < length(p1[j], p1b[j]) then p1[j] = p1a[j] else p1[j] = p1b[j] end
-	 else
-	    p1[j]=nil
-	 end
       end
 
+      -- swap all objects and repeat above steps
+      p1,p2,e1,e2 = p2,p1,e2,e1
    end
 
 
    -- make the segments
    local segs={} -- these will be the segment objects for drawing
    local s={} -- these are the segments for finding intersect
-   for i=1,4 do
+   for i=1,#p1 do
       if p1[i] and p2[i] then
 	 s[#s+1] = ipe.Segment(p1[i],p2[i])
 	 segs[#segs+1] = { obj = make_segment(model,p1[i], p2[i]), select = nil }		  
