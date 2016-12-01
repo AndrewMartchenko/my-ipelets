@@ -30,7 +30,6 @@
 
    --[[
       TODO: make ipelet work with
-      - arcs
       - splines
       --]]
 
@@ -41,6 +40,11 @@
 Draws tangent segments from a primary selected marker/circle/ellipse to all other selected markers, circles and ellipses.
 By Andrew Martchenko
 ]]
+
+A = ipe.Arc
+S = ipe.Segment
+V = ipe.Vector
+M = ipe.Matrix
 
 function create_objects(model, objects)
 
@@ -100,8 +104,8 @@ function unit_circ_to_mark_tangent_points(m)
    local len = m:sqLen()
    if(len<=1) then return end -- there are no tagent lines in this case
    local r = math.sqrt(len - 1)
-   local a1 = ipe.Arc(ipe.Matrix(r,0,0,r,m.x,m.y))
-   local a2 = ipe.Arc(ipe.Matrix(1,0,0,1,0,0))
+   local a1 = A(M(r,0,0,r,m.x,m.y))
+   local a2 = A(M(1,0,0,1,0,0))
    return a1:intersect(a2)
    
 end
@@ -131,16 +135,54 @@ function ellipse_to_mark_tangent_segments(model, m, e)
    return segs
 end
 
+function remove_equal_points(pts)
+   local i=1
+   while i<=#pts-1 do
+      -- print("i=",i)
+      local kill = {}
+      local j=i+1
+      while j<=#pts do
+	 if (pts[i]-pts[j]):len()<1e-9 then kill[#kill+1]=j end
+	 j=j+1
+      end
+      if #kill~=0 then
+	 table.insert(kill,1,i)
+
+	 for k=#kill,1,-1 do
+	    table.remove(pts,kill[k])
+	 end
+      else
+	 i=i+1
+      end
+   end
+end
+
+function ellipse_to_ellipse_intersects(e1,e2)
+   local ints1 = A(e1):intersect(A(e2))
+   local ints2 = A(e2):intersect(A(e1))
+   if #ints1<#ints2 then return ints1
+   else return ints2 end
+end
+
 function ellipse_to_ellipse_tangent_segments(model, e1, e2)
    local p1, p2 = {},{}
    local pa,pb -- temporary points
 
-   local arc1 = ipe.Arc(e1)
-   local arc2 = ipe.Arc(e2)
+   local arc1 = A(e1)
+   local arc2 = A(e2)
 
-   local ints = arc1:intersect(arc2)
+   -- local ints = arc1:intersect(arc2)
+   local ints = ellipse_to_ellipse_intersects(e1,e2)
 
-   if #ints==0 then -- ellipses are not intersecting
+   -- print("before")
+   -- for i=1,#ints do print(ints[i]) end
+
+   remove_equal_points(ints)
+   -- print("after")
+   -- for i=1,#ints do print(ints[i]) end
+
+
+   if #ints<=1 then -- ellipses are not intersecting
       -- start at any point
       p1[1] = ellipse_point_at_angle(e1,0)
       -- from p1a find tangent points to e2, call these points p2[1] and p2[2]
@@ -152,32 +194,25 @@ function ellipse_to_ellipse_tangent_segments(model, e1, e2)
       p2[3], p2[4] = p2[1], p2[2]
 
    else
-      local circ
-      local cx1, cx2
       local segs={}
       for i=1,#ints do
 
 	 -- at intersection create a small circle
-	 circ = ipe.Arc(ipe.Matrix({1,0,0,1,ints[i].x,ints[i].y}))
+	 local circ = A(M({0.1,0,0,0.1,ints[i].x,ints[i].y}))
 
 	 -- find intersects between small circle and ellipses
-	 cx1 = circ:intersect(arc1)
-	 cx2 = circ:intersect(arc2) 
+	 local cx1 = circ:intersect(arc1)
+	 local cx2 = circ:intersect(arc2) 
 
 	 -- set p1[i] and p2[i] to the points that are outside both ellipses
-	 if is_point_inside_ellipse((cx1[1]+cx2[1])*0.5,e1)==false and is_point_inside_ellipse((cx1[1]+cx2[1])*0.5,e2)==false then
-	    p1[i] = cx1[1]
-	    p2[i] = cx2[1]
-	 elseif is_point_inside_ellipse((cx1[1]+cx2[2])*0.5,e1)==false and is_point_inside_ellipse((cx1[1]+cx2[2])*0.5,e2)==false then
-	    p1[i] = cx1[1]
-	    p2[i] = cx2[2]
-	 elseif is_point_inside_ellipse((cx1[2]+cx2[1])*0.5,e1)==false and is_point_inside_ellipse((cx1[2]+cx2[1])*0.5,e2)==false then
-	    p1[i] = cx1[2]
-	    p2[i] = cx2[1]
-	 else
-	    p1[i] = cx1[2]
-	    p2[i] = cx2[2]
-	 end
+	 if is_point_inside_ellipse((cx1[1]+cx2[1])*0.5,e1)==false and
+	    is_point_inside_ellipse((cx1[1]+cx2[1])*0.5,e2)==false then p1[i],p2[i] = cx1[1],cx2[1]
+	 elseif is_point_inside_ellipse((cx1[1]+cx2[2])*0.5,e1)==false and
+	    is_point_inside_ellipse((cx1[1]+cx2[2])*0.5,e2)==false then p1[i],p2[i] = cx1[1],cx2[2]
+	 elseif is_point_inside_ellipse((cx1[2]+cx2[1])*0.5,e1)==false and
+	    is_point_inside_ellipse((cx1[2]+cx2[1])*0.5,e2)==false then p1[i],p2[i] = cx1[2],cx2[1]
+	 else p1[i],p2[i] = cx1[2],cx2[2] end
+
 
       end
 
@@ -193,14 +228,24 @@ function ellipse_to_ellipse_tangent_segments(model, e1, e2)
       for j=1,#p1 do -- for all four possible tangent points
 
 	 -- if p1[j] exists, then generate possible tangent points to e2
-	 pa,pb = ellipse_to_mark_tangent_points(p1[j], e2) 
+	 pa,pb = ellipse_to_mark_tangent_points(p1[j], e2)
 
-	 -- if generated tangent points exist
-	 if is_point_inside_ellipse(pa,e1) then p2[j]=pb
-	 elseif is_point_inside_ellipse(pb,e1) then p2[j]=pa
-	    -- find the closest one to the previouse value of p2[j] and set it to p2[j]
-	 elseif (p2[j]-pa):len() < (p2[j]-pb):len() then p2[j] = pa else p2[j] = pb end
+	 if #ints==0 then -- if ellipses are not intersecting
+	    -- if dot product of the current tangent with proposed path a is greater than with path b then choos it.
+	    if (p2[j]-p1[j])..(pa-p1[j]):normalized() > (p2[j]-p1[j])..(pb-p1[j]):normalized() then p2[j] = pa else p2[j] = pb end
 
+	       
+	 else -- if ellipses are intersecting
+
+	    -- if generated tangent points exist
+	    if is_point_inside_ellipse(pa,e1) then p2[j]=pb
+	    elseif is_point_inside_ellipse(pb,e1) then p2[j]=pa
+	    else
+	       local l = ipe.LineThrough(ints[j], p2[j]-(p1[j]-ints[j]))
+	       if S(p1[j],pa):intersects(l) then p2[j]=pb else p2[j]=pa end
+	    end
+	    
+	 end
 
       end
 
@@ -214,16 +259,15 @@ function ellipse_to_ellipse_tangent_segments(model, e1, e2)
    local s={} -- these are the segments for finding intersect
    for i=1,#p1 do
       if p1[i] and p2[i] then
-	 s[#s+1] = ipe.Segment(p1[i],p2[i])
+	 s[#s+1] = S(p1[i],p2[i])
 	 segs[#segs+1] = { obj = make_segment(model,p1[i], p2[i]), select = nil }		  
       end
    end
 
-   -- if only two segments, then there cannot be andy intersects
+   -- if only two segments, then there cannot be any intersects
    if #s==2 then return segs end
 
    -- else search intersecting segments and return
-   local s1,s2
    for i=1,#s do
       for j=i,#s do
 	 if s[i]:intersects(s[j]) then
@@ -239,7 +283,7 @@ end
 
 
 function ellipse_point_at_angle(e,t)
-   return e*ipe.Vector(math.cos(t), math.sin(t))
+   return e*V(math.cos(t), math.sin(t))
 end
 
 
