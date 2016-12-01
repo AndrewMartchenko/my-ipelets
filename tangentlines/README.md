@@ -18,9 +18,3 @@ Download [tangentlines.lua](tangentlines.lua) and copy to ~/.ipe/ipelets/ (or to
 ## Author
 
 * Andrew Martchenko
-
-## Bugs
-
-1. Fails to draw tangent lines when a small ellipse is intersecting the pointy end of a large ellipse as in the example below.
-
-![examples](bug_1.png)
