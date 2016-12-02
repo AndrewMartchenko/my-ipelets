@@ -45,6 +45,7 @@ A = ipe.Arc
 S = ipe.Segment
 V = ipe.Vector
 M = ipe.Matrix
+L = ipe.LineThrough
 
 function create_objects(model, objects)
 
@@ -77,10 +78,6 @@ function make_segment(model, p1, p2)
    return ipe.Path(model.attributes, {shape} )
 end
 
-function circle_radius(mat)
-   local e = mat:elements()
-   return math.sqrt(e[1]*e[1]+e[2]*e[2])
-end
 
 function get_object_type(obj)
    local matrix
@@ -115,14 +112,13 @@ function ellipse_to_mark_tangent_points(m, e)
    if m==nil then return end
    local ma=e:inverse()*m; -- undo affine transformations
    local p = unit_circ_to_mark_tangent_points(ma)
-
    -- redo affine transformation if tangent points exist
    if p~=nil then return e*p[1], e*p[2]
    else return end
 end
 
 
-function is_point_inside_ellipse(p,e)
+function is_point_in_ellipse(p,e)
    if (e:inverse()*p):len() < 1 then return true
    else return false end
 end
@@ -165,6 +161,9 @@ function ellipse_to_ellipse_intersects(e1,e2)
 end
 
 function ellipse_to_ellipse_tangent_segments(model, e1, e2)
+
+   if e1==e2 then return {} end
+   
    local p1, p2 = {},{}
    local pa,pb -- temporary points
 
@@ -172,23 +171,25 @@ function ellipse_to_ellipse_tangent_segments(model, e1, e2)
    local arc2 = A(e2)
 
    -- local ints = arc1:intersect(arc2)
-   local ints = ellipse_to_ellipse_intersects(e1,e2)
 
+   -- replace this function once arc1:intersect(arc2) is fixed
+   local ints = ellipse_to_ellipse_intersects(e1,e2)
    -- print("before")
    -- for i=1,#ints do print(ints[i]) end
-
    remove_equal_points(ints)
    -- print("after")
    -- for i=1,#ints do print(ints[i]) end
 
-
    if #ints<=1 then -- ellipses are not intersecting
-      -- start at any point
-      p1[1] = ellipse_point_at_angle(e1,0)
+      if e1:translation()==e2:translation() then return {} end
+      local l= L(e1:translation(),e2:translation())
+
+      p1[1] = arc1:intersect(l)[1]
       -- from p1a find tangent points to e2, call these points p2[1] and p2[2]
       p2[1],p2[2] = ellipse_to_mark_tangent_points(p1[1],e2)
       -- from p2[1] and p2[2] find tangent points to e1, call them p1[1], p1[2], p1[3] and p1[4]
       p1[1],p1[3] = ellipse_to_mark_tangent_points(p2[1],e1)
+      if p1[1]==nil then return {} end
       p1[2],p1[4] = ellipse_to_mark_tangent_points(p2[2],e1)
 
       p2[3], p2[4] = p2[1], p2[2]
@@ -205,12 +206,12 @@ function ellipse_to_ellipse_tangent_segments(model, e1, e2)
 	 local cx2 = circ:intersect(arc2) 
 
 	 -- set p1[i] and p2[i] to the points that are outside both ellipses
-	 if is_point_inside_ellipse((cx1[1]+cx2[1])*0.5,e1)==false and
-	    is_point_inside_ellipse((cx1[1]+cx2[1])*0.5,e2)==false then p1[i],p2[i] = cx1[1],cx2[1]
-	 elseif is_point_inside_ellipse((cx1[1]+cx2[2])*0.5,e1)==false and
-	    is_point_inside_ellipse((cx1[1]+cx2[2])*0.5,e2)==false then p1[i],p2[i] = cx1[1],cx2[2]
-	 elseif is_point_inside_ellipse((cx1[2]+cx2[1])*0.5,e1)==false and
-	    is_point_inside_ellipse((cx1[2]+cx2[1])*0.5,e2)==false then p1[i],p2[i] = cx1[2],cx2[1]
+	 if is_point_in_ellipse(0.5*(cx1[1]+cx2[1]),e1)==false and
+	    is_point_in_ellipse(0.5*(cx1[1]+cx2[1]),e2)==false then p1[i],p2[i] = cx1[1],cx2[1]
+	 elseif is_point_in_ellipse(0.5*(cx1[1]+cx2[2]),e1)==false and
+	    is_point_in_ellipse(0.5*(cx1[1]+cx2[2]),e2)==false then p1[i],p2[i] = cx1[1],cx2[2]
+	 elseif is_point_in_ellipse(0.5*(cx1[2]+cx2[1]),e1)==false and
+	    is_point_in_ellipse(0.5*(cx1[2]+cx2[1]),e2)==false then p1[i],p2[i] = cx1[2],cx2[1]
 	 else p1[i],p2[i] = cx1[2],cx2[2] end
 
 
@@ -218,50 +219,53 @@ function ellipse_to_ellipse_tangent_segments(model, e1, e2)
 
    end
    
+   if #ints==0 then -- if ellipses are not intersecting
+      for i=1,20 do 
+	 for j=1,#p1 do -- for all four possible tangent points
+	    pa,pb = ellipse_to_mark_tangent_points(p1[j], e2)
+	    -- if dot product of the current tangent with proposed path a is > than with path b then choose it.
+	    if (p2[j]-p1[j])..(pa-p1[j]):normalized() > (p2[j]-p1[j])..(pb-p1[j]):normalized() then
+	       p2[j] = pa else p2[j] = pb end
+	 end
+	 p1,p2,e1,e2 = p2,p1,e2,e1
+      end
+   else -- if ellipses are intersecting
+      for i=1,20 do 
+	 for j=1,#p1 do -- for all four possible tangent points
+	    pa,pb = ellipse_to_mark_tangent_points(p1[j], e2)
+	    local l = L(ints[j], p2[j]-(p1[j]-ints[j]))
+	    if S(p1[j],pa):intersects(l) then p2[j]=pb else p2[j]=pa end
+	 end
+	 p1,p2,e1,e2 = p2,p1,e2,e1
+      end
+   end
+
 
    
-   -- from all p1[x] points find tangent point to e2, call them p2[x] and keep only the ones that are closest to the old p2[x] points
-   -- repeat last step until convergence.
+   -- for i=1,20 do 
+   --    for j=1,#p1 do -- for all four possible tangent points
 
-   for i=1,20 do 
+   -- 	 if #ints==0 then -- if ellipses are not intersecting
+   -- 	    -- if dot product of the current tangent with proposed path a is > than with path b then choose it.
+   -- 	    if (p2[j]-p1[j])..(pa-p1[j]):normalized() > (p2[j]-p1[j])..(pb-p1[j]):normalized() then
+   -- 	       p2[j] = pa else p2[j] = pb end
+   -- 	 else -- if ellipses are intersecting
+   -- 	    local l = L(ints[j], p2[j]-(p1[j]-ints[j]))
+   -- 	    if S(p1[j],pa):intersects(l) then p2[j]=pb else p2[j]=pa end
+   -- 	 end
+   --    end
 
-      for j=1,#p1 do -- for all four possible tangent points
-
-	 -- if p1[j] exists, then generate possible tangent points to e2
-	 pa,pb = ellipse_to_mark_tangent_points(p1[j], e2)
-
-	 if #ints==0 then -- if ellipses are not intersecting
-	    -- if dot product of the current tangent with proposed path a is greater than with path b then choos it.
-	    if (p2[j]-p1[j])..(pa-p1[j]):normalized() > (p2[j]-p1[j])..(pb-p1[j]):normalized() then p2[j] = pa else p2[j] = pb end
-
-	       
-	 else -- if ellipses are intersecting
-
-	    -- if generated tangent points exist
-	    if is_point_inside_ellipse(pa,e1) then p2[j]=pb
-	    elseif is_point_inside_ellipse(pb,e1) then p2[j]=pa
-	    else
-	       local l = ipe.LineThrough(ints[j], p2[j]-(p1[j]-ints[j]))
-	       if S(p1[j],pa):intersects(l) then p2[j]=pb else p2[j]=pa end
-	    end
-	    
-	 end
-
-      end
-
-      -- swap all objects and repeat above steps
-      p1,p2,e1,e2 = p2,p1,e2,e1
-   end
+   --    -- swap all objects and repeat above steps
+   --    p1,p2,e1,e2 = p2,p1,e2,e1
+   -- end
 
 
    -- make the segments
    local segs={} -- these will be the segment objects for drawing
    local s={} -- these are the segments for finding intersect
    for i=1,#p1 do
-      if p1[i] and p2[i] then
 	 s[#s+1] = S(p1[i],p2[i])
 	 segs[#segs+1] = { obj = make_segment(model,p1[i], p2[i]), select = nil }		  
-      end
    end
 
    -- if only two segments, then there cannot be any intersects
@@ -280,12 +284,6 @@ function ellipse_to_ellipse_tangent_segments(model, e1, e2)
 
    return segs
 end
-
-
-function ellipse_point_at_angle(e,t)
-   return e*V(math.cos(t), math.sin(t))
-end
-
 
 function print_selection_warning(model)
    model:warning("Must select at least two markers, circles, ellipses and/or arcs")
